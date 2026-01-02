@@ -1,0 +1,59 @@
+.PHONY: dev test build clean help daemon web tui
+
+# Default target
+help:
+	@echo "Gastown Viewer Intent - Build Targets"
+	@echo ""
+	@echo "  make dev      - Run daemon + web dev server (parallel)"
+	@echo "  make daemon   - Run daemon only (localhost:7070)"
+	@echo "  make web      - Run web dev server only (localhost:5173)"
+	@echo "  make tui      - Run TUI client"
+	@echo "  make test     - Run all tests"
+	@echo "  make build    - Build all binaries"
+	@echo "  make clean    - Remove build artifacts"
+	@echo ""
+
+# Development - runs daemon and web in parallel
+dev:
+	@echo "Starting Gastown Viewer Intent..."
+	@echo "  Daemon: http://localhost:7070"
+	@echo "  Web UI: http://localhost:5173"
+	@echo ""
+	@$(MAKE) -j2 daemon web
+
+# Run daemon
+daemon:
+	go run ./cmd/gvid
+
+# Run web dev server
+web:
+	cd web && npm run dev
+
+# Run TUI
+tui:
+	go run ./cmd/gvi-tui
+
+# Run tests
+test:
+	@echo "=== Go Tests ==="
+	go test -v ./...
+	@echo ""
+	@echo "=== Web Lint ==="
+	cd web && npm run lint 2>/dev/null || echo "Web lint not configured yet"
+
+# Build all
+build:
+	@echo "=== Building Go binaries ==="
+	go build -o bin/gvid ./cmd/gvid
+	go build -o bin/gvi-tui ./cmd/gvi-tui
+	@echo ""
+	@echo "=== Building Web ==="
+	cd web && npm run build
+	@echo ""
+	@echo "Build complete. Binaries in ./bin/"
+
+# Clean
+clean:
+	rm -rf bin/
+	rm -rf web/dist/
+	go clean ./...
