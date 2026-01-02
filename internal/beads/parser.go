@@ -1,0 +1,208 @@
+package beads
+
+import (
+	"encoding/json"
+	"strings"
+	"time"
+
+	"github.com/intent-solutions-io/gastown-viewer-intent/internal/model"
+)
+
+// BDIssue represents an issue as returned by bd --json.
+type BDIssue struct {
+	ID              string        `json:"id"`
+	Title           string        `json:"title"`
+	Description     string        `json:"description"`
+	Status          string        `json:"status"`
+	Priority        int           `json:"priority"`
+	IssueType       string        `json:"issue_type"`
+	CreatedAt       time.Time     `json:"created_at"`
+	UpdatedAt       time.Time     `json:"updated_at"`
+	ClosedAt        *time.Time    `json:"closed_at,omitempty"`
+	DependencyCount int           `json:"dependency_count,omitempty"`
+	DependentCount  int           `json:"dependent_count,omitempty"`
+	Dependencies    []BDIssue     `json:"dependencies,omitempty"`
+	Dependents      []BDIssue     `json:"dependents,omitempty"`
+	BlockedBy       []string      `json:"blocked_by,omitempty"`
+	BlockedByCount  int           `json:"blocked_by_count,omitempty"`
+	DepType         string        `json:"dependency_type,omitempty"`
+}
+
+// ToModelIssue converts a BDIssue to the domain model Issue.
+func (bi *BDIssue) ToModelIssue() model.Issue {
+	issue := model.Issue{
+		ID:          bi.ID,
+		Title:       bi.Title,
+		Description: bi.Description,
+		Status:      mapStatus(bi.Status),
+		Priority:    mapPriority(bi.Priority),
+		CreatedAt:   bi.CreatedAt,
+		UpdatedAt:   bi.UpdatedAt,
+		Children:    []model.IssueSummary{},
+		Blocks:      []model.IssueSummary{},
+		BlockedBy:   []model.IssueSummary{},
+	}
+
+	// Parse "Done when:" from description
+	issue.DoneWhen = parseDoneWhen(bi.Description)
+
+	// Map dependencies to BlockedBy (things this issue depends on)
+	for _, dep := range bi.Dependencies {
+		if dep.DepType == "blocks" {
+			issue.BlockedBy = append(issue.BlockedBy, model.IssueSummary{
+				ID:       dep.ID,
+				Title:    dep.Title,
+				Status:   mapStatus(dep.Status),
+				Priority: mapPriority(dep.Priority),
+			})
+		} else if dep.DepType == "parent-child" {
+			issue.Parent = &model.IssueSummary{
+				ID:       dep.ID,
+				Title:    dep.Title,
+				Status:   mapStatus(dep.Status),
+				Priority: mapPriority(dep.Priority),
+			}
+		}
+	}
+
+	// Map dependents to Blocks (things that depend on this issue)
+	for _, dep := range bi.Dependents {
+		if dep.DepType == "blocks" {
+			issue.Blocks = append(issue.Blocks, model.IssueSummary{
+				ID:       dep.ID,
+				Title:    dep.Title,
+				Status:   mapStatus(dep.Status),
+				Priority: mapPriority(dep.Priority),
+			})
+		} else if dep.DepType == "parent-child" {
+			issue.Children = append(issue.Children, model.IssueSummary{
+				ID:       dep.ID,
+				Title:    dep.Title,
+				Status:   mapStatus(dep.Status),
+				Priority: mapPriority(dep.Priority),
+			})
+		}
+	}
+
+	return issue
+}
+
+// ToSummary converts a BDIssue to an IssueSummary.
+func (bi *BDIssue) ToSummary() model.IssueSummary {
+	return model.IssueSummary{
+		ID:       bi.ID,
+		Title:    bi.Title,
+		Status:   mapStatus(bi.Status),
+		Priority: mapPriority(bi.Priority),
+	}
+}
+
+// mapStatus converts bd status string to model.Status.
+func mapStatus(s string) model.Status {
+	switch strings.ToLower(s) {
+	case "open", "pending":
+		return model.StatusPending
+	case "in_progress", "in-progress", "inprogress":
+		return model.StatusInProgress
+	case "closed", "done", "complete":
+		return model.StatusDone
+	case "blocked":
+		return model.StatusBlocked
+	default:
+		return model.StatusPending
+	}
+}
+
+// mapPriority converts bd priority int to model.Priority.
+func mapPriority(p int) model.Priority {
+	switch p {
+	case 1:
+		return model.PriorityHigh
+	case 2:
+		return model.PriorityMedium
+	case 3:
+		return model.PriorityLow
+	default:
+		return model.PriorityMedium
+	}
+}
+
+// parseDoneWhen extracts "Done when:" bullets from description.
+func parseDoneWhen(description string) []string {
+	var items []string
+
+	lines := strings.Split(description, "\n")
+	inDoneWhen := false
+
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+
+		if strings.HasPrefix(strings.ToLower(line), "done when:") {
+			inDoneWhen = true
+			continue
+		}
+
+		if inDoneWhen {
+			// Empty line ends the section
+			if line == "" {
+				break
+			}
+			// Lines starting with - are items
+			if strings.HasPrefix(line, "- ") || strings.HasPrefix(line, "* ") {
+				items = append(items, strings.TrimPrefix(strings.TrimPrefix(line, "- "), "* "))
+			}
+		}
+	}
+
+	return items
+}
+
+// ParseIssueList parses JSON output from bd list or bd show.
+func ParseIssueList(data []byte) ([]BDIssue, error) {
+	if len(data) == 0 {
+		return []BDIssue{}, nil
+	}
+
+	var issues []BDIssue
+	if err := json.Unmarshal(data, &issues); err != nil {
+		return nil, err
+	}
+
+	return issues, nil
+}
+
+// BDBlockedIssue represents an issue from bd blocked --json.
+type BDBlockedIssue struct {
+	ID             string   `json:"id"`
+	Title          string   `json:"title"`
+	BlockedByCount int      `json:"blocked_by_count"`
+	BlockedBy      []string `json:"blocked_by"`
+}
+
+// ParseBlockedList parses JSON output from bd blocked.
+func ParseBlockedList(data []byte) ([]BDBlockedIssue, error) {
+	if len(data) == 0 {
+		return []BDBlockedIssue{}, nil
+	}
+
+	var issues []BDBlockedIssue
+	if err := json.Unmarshal(data, &issues); err != nil {
+		return nil, err
+	}
+
+	return issues, nil
+}
+
+// ParseVersion extracts version number from bd --version output.
+func ParseVersion(data []byte) string {
+	s := strings.TrimSpace(string(data))
+	// Output is like "bd version 0.29.0 (dev)"
+	parts := strings.Fields(s)
+	for i, p := range parts {
+		if p == "version" && i+1 < len(parts) {
+			return parts[i+1]
+		}
+	}
+	// Fallback: return trimmed output
+	return s
+}
