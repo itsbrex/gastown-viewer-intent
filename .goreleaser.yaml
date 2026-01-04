@@ -72,6 +72,21 @@ changelog:
       - '^test:'
       - '^chore:'
 
+brews:
+  - name: gvid
+    repository:
+      owner: intent-solutions-io
+      name: homebrew-tap
+      token: "{{ .Env.HOMEBREW_TAP_TOKEN }}"
+    homepage: https://github.com/intent-solutions-io/gastown-viewer-intent
+    description: Mission Control dashboard for Gastown multi-agent workspaces
+    license: MIT
+    install: |
+      bin.install "gvid"
+      bin.install "gvi-tui"
+    test: |
+      system "#{bin}/gvid", "--version"
+
 release:
   github:
     owner: intent-solutions-io
