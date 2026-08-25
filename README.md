@@ -6,6 +6,8 @@
 [![Release](https://img.shields.io/github/v/release/jeremylongshore/gastown-viewer-intent)](https://github.com/jeremylongshore/gastown-viewer-intent/releases)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
+[![ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/U5S225PTME)
+
 **Links:** [Gist One-Pager](https://gist.github.com/jeremylongshore/cd5d24298d05140eca8a3ef2cb2773f3) · [GitHub](https://github.com/jeremylongshore/gastown-viewer-intent) · [v0.6.0 Release](https://github.com/jeremylongshore/gastown-viewer-intent/releases/tag/v0.6.0) · [CHANGELOG](CHANGELOG.md)
 
 ## What's New in v0.6.0 (TUI Tier-1)
